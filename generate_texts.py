@@ -5,7 +5,7 @@ import argparse
 from tqdm import trange
 from transformers import GPT2LMHeadModel
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"  # 此处设置程序使用哪些显卡
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"  # 此處設置程式使用哪些顯卡
 
 
 def is_word(word):
@@ -52,17 +52,20 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
     top_k = min(top_k, logits.size(-1))  # Safety check
     if top_k > 0:
         # Remove all tokens with a probability less than the last token of the top-k
-        indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
+        indices_to_remove = logits < torch.topk(logits, top_k)[
+            0][..., -1, None]
         logits[indices_to_remove] = filter_value
 
     if top_p > 0.0:
         sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-        cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+        cumulative_probs = torch.cumsum(
+            F.softmax(sorted_logits, dim=-1), dim=-1)
 
         # Remove tokens with cumulative probability above the threshold
         sorted_indices_to_remove = cumulative_probs > top_p
         # Shift the indices to the right to keep also the first token above the threshold
-        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+        sorted_indices_to_remove[...,
+                                 1:] = sorted_indices_to_remove[..., :-1].clone()
         sorted_indices_to_remove[..., 0] = 0
 
         indices_to_remove = sorted_indices[sorted_indices_to_remove]
@@ -84,32 +87,47 @@ def sample_sequence(model, context, length, n_ctx, tokenizer, temperature=1.0, t
             for id in set(generated):
                 next_token_logits[id] /= repitition_penalty
             next_token_logits = next_token_logits / temperature
-            next_token_logits[tokenizer.convert_tokens_to_ids('[UNK]')] = -float('Inf')
-            filtered_logits = top_k_top_p_filtering(next_token_logits, top_k=top_k, top_p=top_p)
-            next_token = torch.multinomial(F.softmax(filtered_logits, dim=-1), num_samples=1)
+            next_token_logits[tokenizer.convert_tokens_to_ids(
+                '[UNK]')] = -float('Inf')
+            filtered_logits = top_k_top_p_filtering(
+                next_token_logits, top_k=top_k, top_p=top_p)
+            next_token = torch.multinomial(
+                F.softmax(filtered_logits, dim=-1), num_samples=1)
             generated = torch.cat((generated, next_token.unsqueeze(0)), dim=1)
     return generated
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--device', default='0,1,2,3', type=str, required=False, help='设置使用哪些显卡')
-    parser.add_argument('--length', default=-1, type=int, required=False, help='生成长度')
-    parser.add_argument('--temperature', default=1, type=float, required=False, help='生成温度，越高越随机')
-    parser.add_argument('--topk', default=8, type=int, required=False, help='生成的时候最高几选一')
-    parser.add_argument('--topp', default=0, type=float, required=False, help='生成的时候积累概率最高多少')
+    parser.add_argument('--device', default='0,1,2,3',
+                        type=str, required=False, help='設置使用哪些顯卡')
+    parser.add_argument('--length', default=-1, type=int,
+                        required=False, help='生成長度')
+    parser.add_argument('--temperature', default=1,
+                        type=float, required=False, help='生成溫度，越高越隨機')
+    parser.add_argument('--topk', default=8, type=int,
+                        required=False, help='生成的時候最高幾選一')
+    parser.add_argument('--topp', default=0, type=float,
+                        required=False, help='生成的時候積累概率最高多少')
     parser.add_argument('--model_config', default='config/model_config_small.json', type=str, required=False,
-                        help='模型参数路径')
-    parser.add_argument('--tokenizer_path', default='cache/vocab_small.txt', type=str, required=False, help='词表路径')
-    parser.add_argument('--model_path', default='model/final_model', type=str, required=False, help='模型路径')
-    parser.add_argument('--save_path', default='generated/', type=str, required=False, help='存放生成的文件的路径')
-    parser.add_argument('--articles_per_title', default=5, type=int, required=False, help='每个标题生成多少篇文章')
-    parser.add_argument('--titles', default='萧炎', type=str, required=False, help='标题列表，是一个字符串，用空格分开')
+                        help='模型參數路徑')
+    parser.add_argument('--tokenizer_path', default='cache/vocab_small.txt',
+                        type=str, required=False, help='詞表路徑')
+    parser.add_argument('--model_path', default='model/final_model',
+                        type=str, required=False, help='模型路徑')
+    parser.add_argument('--save_path', default='generated/',
+                        type=str, required=False, help='存放生成的檔的路徑')
+    parser.add_argument('--articles_per_title', default=5,
+                        type=int, required=False, help='每個標題生成多少篇文章')
+    parser.add_argument('--titles', default='蕭炎', type=str,
+                        required=False, help='標題清單，是一個字串，用空格分開')
     parser.add_argument('--titles_file', default='', type=str, required=False,
-                        help='标题列表文件，文件中每行一个标题。如果这个选项有值则titles无效')
-    parser.add_argument('--no_wordpiece', action='store_true', help='不做word piece切词')
-    parser.add_argument('--segment', action='store_true', help='中文以词为单位')
-    parser.add_argument('--repetition_penalty', default=1.0, type=float, required=False)
+                        help='標題列表檔，檔中每行一個標題。如果這個選項有值則titles無效')
+    parser.add_argument(
+        '--no_wordpiece', action='store_true', help='不做word piece切詞')
+    parser.add_argument('--segment', action='store_true', help='中文以詞為單位')
+    parser.add_argument('--repetition_penalty', default=1.0,
+                        type=float, required=False)
 
     args = parser.parse_args()
     print('args:\n' + args.__repr__())
@@ -119,19 +137,19 @@ def main():
     else:
         from tokenizations import tokenization_bert
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.device  # 此处设置程序使用哪些显卡
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.device  # 此處設置程式使用哪些顯卡
     length = args.length
     temperature = args.temperature
     topk = args.topk
     topp = args.topp
     repetition_penalty = args.repetition_penalty
 
-    titles = args.titles.split()  # 列表，里面每个元素是一个生成的标题
+    titles = args.titles.split()  # 清單，裡面每個元素是一個生成的標題
     if args.titles_file:
         with open(args.titles_file, 'r') as f:
             titles = [line.strip('\n') for line in f.readlines()]
-    articles_per_title = args.articles_per_title  # 这里定义一个标题生成多少篇文章
-    save_path = args.save_path  # 设置存到哪
+    articles_per_title = args.articles_per_title  # 這裡定義一個標題生成多少篇文章
+    save_path = args.save_path  # 設置存到哪
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -150,7 +168,8 @@ def main():
     for i, title in enumerate(titles):
         for j in range(articles_per_title):
             with open(save_path + str(i) + '-' + str(j) + '.txt', 'w') as f:
-                context_tokens = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(title))
+                context_tokens = tokenizer.convert_tokens_to_ids(
+                    tokenizer.tokenize(title))
                 generated = 0
                 out = sample_sequence(
                     n_ctx=n_ctx,
@@ -164,7 +183,7 @@ def main():
                 generated += 1
                 text = tokenizer.convert_ids_to_tokens(out)
 
-                for i, item in enumerate(text[:-1]):  # 确保英文前后有空格
+                for i, item in enumerate(text[:-1]):  # 確保英文前後有空格
                     if is_word(item) and is_word(text[i + 1]):
                         text[i] = item + ' '
 

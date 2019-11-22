@@ -50,17 +50,20 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
     top_k = min(top_k, logits.size(-1))  # Safety check
     if top_k > 0:
         # Remove all tokens with a probability less than the last token of the top-k
-        indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
+        indices_to_remove = logits < torch.topk(logits, top_k)[
+            0][..., -1, None]
         logits[indices_to_remove] = filter_value
 
     if top_p > 0.0:
         sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-        cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+        cumulative_probs = torch.cumsum(
+            F.softmax(sorted_logits, dim=-1), dim=-1)
 
         # Remove tokens with cumulative probability above the threshold
         sorted_indices_to_remove = cumulative_probs > top_p
         # Shift the indices to the right to keep also the first token above the threshold
-        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+        sorted_indices_to_remove[...,
+                                 1:] = sorted_indices_to_remove[..., :-1].clone()
         sorted_indices_to_remove[..., 0] = 0
 
         indices_to_remove = sorted_indices[sorted_indices_to_remove]
@@ -82,9 +85,12 @@ def sample_sequence(model, context, length, n_ctx, tokenizer, temperature=1.0, t
             for id in set(generated):
                 next_token_logits[id] /= repitition_penalty
             next_token_logits = next_token_logits / temperature
-            next_token_logits[tokenizer.convert_tokens_to_ids('[UNK]')] = -float('Inf')
-            filtered_logits = top_k_top_p_filtering(next_token_logits, top_k=top_k, top_p=top_p)
-            next_token = torch.multinomial(F.softmax(filtered_logits, dim=-1), num_samples=1)
+            next_token_logits[tokenizer.convert_tokens_to_ids(
+                '[UNK]')] = -float('Inf')
+            filtered_logits = top_k_top_p_filtering(
+                next_token_logits, top_k=top_k, top_p=top_p)
+            next_token = torch.multinomial(
+                F.softmax(filtered_logits, dim=-1), num_samples=1)
             generated = torch.cat((generated, next_token.unsqueeze(0)), dim=1)
     return generated.tolist()[0]
 
@@ -103,14 +109,17 @@ def fast_sample_sequence(model, context, length, temperature=1.0, top_k=30, top_
             output = model(prev, past=past)
             output, past = output[:2]
             output = output[-1].squeeze(0) / temperature
-            filtered_logits = top_k_top_p_filtering(output, top_k=top_k, top_p=top_p)
-            next_token = torch.multinomial(torch.softmax(filtered_logits, dim=-1), num_samples=1)
+            filtered_logits = top_k_top_p_filtering(
+                output, top_k=top_k, top_p=top_p)
+            next_token = torch.multinomial(torch.softmax(
+                filtered_logits, dim=-1), num_samples=1)
             generate.append(next_token.item())
             prev = next_token.view(1, 1)
     return generate
 
+# 通過命令列參數--fast_pattern，指定模式
 
-# 通过命令行参数--fast_pattern，指定模式
+
 def generate(n_ctx, model, context, length, tokenizer, temperature=1, top_k=0, top_p=0.0, repitition_penalty=1.0, device='cpu',
              is_fast_pattern=False):
     if is_fast_pattern:
@@ -123,24 +132,38 @@ def generate(n_ctx, model, context, length, tokenizer, temperature=1, top_k=0, t
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--device', default='0,1,2,3', type=str, required=False, help='生成设备')
-    parser.add_argument('--length', default=-1, type=int, required=False, help='生成长度')
-    parser.add_argument('--batch_size', default=1, type=int, required=False, help='生成的batch size')
-    parser.add_argument('--nsamples', default=10, type=int, required=False, help='生成几个样本')
-    parser.add_argument('--temperature', default=1, type=float, required=False, help='生成温度')
-    parser.add_argument('--topk', default=8, type=int, required=False, help='最高几选一')
-    parser.add_argument('--topp', default=0, type=float, required=False, help='最高积累概率')
+    parser.add_argument('--device', default='0,1,2,3',
+                        type=str, required=False, help='生成設備')
+    parser.add_argument('--length', default=-1, type=int,
+                        required=False, help='生成長度')
+    parser.add_argument('--batch_size', default=1, type=int,
+                        required=False, help='生成的batch size')
+    parser.add_argument('--nsamples', default=10, type=int,
+                        required=False, help='生成幾個樣本')
+    parser.add_argument('--temperature', default=1,
+                        type=float, required=False, help='生成溫度')
+    parser.add_argument('--topk', default=8, type=int,
+                        required=False, help='最高幾選一')
+    parser.add_argument('--topp', default=0, type=float,
+                        required=False, help='最高積累概率')
     parser.add_argument('--model_config', default='config/model_config_small.json', type=str, required=False,
-                        help='模型参数')
-    parser.add_argument('--tokenizer_path', default='cache/vocab_small.txt', type=str, required=False, help='词表路径')
-    parser.add_argument('--model_path', default='model/final_model', type=str, required=False, help='模型路径')
-    parser.add_argument('--prefix', default='萧炎', type=str, required=False, help='生成文章的开头')
-    parser.add_argument('--no_wordpiece', action='store_true', help='不做word piece切词')
-    parser.add_argument('--segment', action='store_true', help='中文以词为单位')
-    parser.add_argument('--fast_pattern', action='store_true', help='采用更加快的方式生成文本')
-    parser.add_argument('--save_samples', action='store_true', help='保存产生的样本')
-    parser.add_argument('--save_samples_path', default='.', type=str, required=False, help="保存样本的路径")
-    parser.add_argument('--repetition_penalty', default=1.0, type=float, required=False)
+                        help='模型參數')
+    parser.add_argument('--tokenizer_path', default='cache/vocab_small.txt',
+                        type=str, required=False, help='詞表路徑')
+    parser.add_argument('--model_path', default='model/final_model',
+                        type=str, required=False, help='模型路徑')
+    parser.add_argument('--prefix', default='蕭炎', type=str,
+                        required=False, help='生成文章的開頭')
+    parser.add_argument(
+        '--no_wordpiece', action='store_true', help='不做word piece切詞')
+    parser.add_argument('--segment', action='store_true', help='中文以詞為單位')
+    parser.add_argument(
+        '--fast_pattern', action='store_true', help='採用更加快的方式生成文本')
+    parser.add_argument('--save_samples', action='store_true', help='保存產生的樣本')
+    parser.add_argument('--save_samples_path', default='.',
+                        type=str, required=False, help="保存樣本的路徑")
+    parser.add_argument('--repetition_penalty', default=1.0,
+                        type=float, required=False)
 
     args = parser.parse_args()
     print('args:\n' + args.__repr__())
@@ -150,7 +173,7 @@ def main():
     else:
         from tokenizations import tokenization_bert
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.device  # 此处设置程序使用哪些显卡
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.device  # 此處設置程式使用哪些顯卡
     length = args.length
     batch_size = args.batch_size
     nsamples = args.nsamples
@@ -173,10 +196,12 @@ def main():
     if args.save_samples:
         if not os.path.exists(args.save_samples_path):
             os.makedirs(args.save_samples_path)
-        samples_file = open(args.save_samples_path + '/samples.txt', 'w', encoding='utf8')
+        samples_file = open(args.save_samples_path +
+                            '/samples.txt', 'w', encoding='utf8')
     while True:
         raw_text = args.prefix
-        context_tokens = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(raw_text))
+        context_tokens = tokenizer.convert_tokens_to_ids(
+            tokenizer.tokenize(raw_text))
         generated = 0
         for _ in range(nsamples // batch_size):
             out = generate(
@@ -190,7 +215,7 @@ def main():
             for i in range(batch_size):
                 generated += 1
                 text = tokenizer.convert_ids_to_tokens(out)
-                for i, item in enumerate(text[:-1]):  # 确保英文前后有空格
+                for i, item in enumerate(text[:-1]):  # 確保英文前後有空格
                     if is_word(item) and is_word(text[i + 1]):
                         text[i] = item + ' '
                 for i, item in enumerate(text):
@@ -200,7 +225,8 @@ def main():
                         text[i] = '\n\n'
                     elif item == '[SEP]':
                         text[i] = '\n'
-                info = "=" * 40 + " SAMPLE " + str(generated) + " " + "=" * 40 + "\n"
+                info = "=" * 40 + " SAMPLE " + \
+                    str(generated) + " " + "=" * 40 + "\n"
                 print(info)
                 text = ''.join(text).replace('##', '').strip()
                 print(text)
